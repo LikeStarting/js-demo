@@ -19,10 +19,11 @@
     this.spareCircles = [];
     this.touchedCircles = [];
     this.touched = false;
+    this.redraw = false;
+    this.reseted = true;
 
     this.messageEle = options.messageEle;
-    this.setEle = options.setEle;
-    this.checkEle = options.checkEle;
+    this.resetEle = options.resetEle;
   }
 
   GestureLock._getComputedSize = function(ele) {
@@ -79,7 +80,6 @@
   GestureLock._getPosition = function(e, ratio) {
     const { left, top } = e.target.getBoundingClientRect();
     const { clientX, clientY } = e.touches[0];
-    // console.log('left-----', left, clientX, e.target)
 
     return {
       x: (clientX - left) * ratio,
@@ -160,9 +160,10 @@
     if (index !== -1) {
       const circle = this.spareCircles.splice(index, 1)[0];
       this.touched = true;
+      this.redraw = true;
+      this.drawing = true;
       this.touchedCircles.push(circle);
     }
-    console.log(JSON.stringify(this.touchedCircles))
   }
 
   GestureLock.prototype.update = function(point) {
@@ -181,25 +182,29 @@
       }
     }
 
-    if (length >= 2) {
-      // 画两圆之间的折线
-      GestureLock._drawLine(ctx, [touchedCircles[length - 2], touchedCircles[length - 1]], {
-        color: lineColor,
-        lineWidth
-      })     
-    }
+    if (this.redraw) {
+      this.redraw = false;
+  
+      if (length >= 1) {
+        // 画下一个圆中的圆点
+        const { x, y } = touchedCircles[length - 1]
+        const touchedPoint = {
+          x, 
+          y, 
+          r: r / 2
+        }
 
-    if (length >= 1) {
-      // 画下一个圆中的圆点
-      const { x, y } = touchedCircles[length - 1]
-      const touchedPoint = {
-        x, 
-        y, 
-        r: r / 2
+        GestureLock._drawFilledCircle(ctx, touchedPoint, {
+          color: dotColor
+        })
       }
-      GestureLock._drawFilledCircle(ctx, touchedPoint, {
-        color: dotColor
-      })
+
+      if (length >= 2) {
+        GestureLock._drawLine(ctx, [touchedCircles[length - 2], touchedCircles[length - 1]], {
+          color: lineColor,
+          lineWidth
+        })  
+      }
     }
   }
 
@@ -219,6 +224,8 @@
       model,
       value: JSON.parse(psdValue)
     }
+
+    this.messageEle.innerHTML = psdValue ? '请解锁' : '请绘制手势图案！';
   }
 
   GestureLock.prototype.checkPassword = function() {
@@ -238,20 +245,41 @@
         break;
     }
 
-    const color = success ? '#2cff66' : '#ff0000';
-    const { ctx, style } = this;
-    this.touchedCircles.forEach(p => {
+    const color = success ? '#2cff66' : '#f24e4e';
+    const { ctx, ctx2, canvas2, style } = this;
+
+    ctx2.clearRect(0, 0, canvas2.width, canvas2.height);
+
+    this.touchedCircles.forEach((p, i, arr) => {
       GestureLock._drawCircle(ctx, p, {
         lineWidth: style.circleLineWidth,
         color
-      })
+      });
+
+      const touchedPoint = {
+        x: p.x,
+        y: p.y,
+        r: p.r / 2
+      };
+
+      GestureLock._drawFilledCircle(ctx, touchedPoint, {
+        color: color
+      });
+
+      if (i > 0) {
+        const p1 = arr[i - 1];
+        GestureLock._drawLine(ctx2, [p1, p], {
+          lineWidth: style.lineWidth,
+          color
+        })
+      }
     })
   }
 
   // Model1: set password for the first time
   GestureLock.prototype.setPassword = function() {
     if (this.touchedCircles.length < 5) {
-      this.updateMessage('密码长度不可少于5！', 1000);
+      this.updateMessage('密码长度不可少于5！');
       return false;
     } else {
       this.password.tmp = [];
@@ -259,7 +287,7 @@
         this.password.tmp.push(c.id)
       });
       this.password.model = 2;
-      this.updateMessage('请再次确定密码！', 1000);
+      this.updateMessage('请再次确定密码！');
     }
     return true;
   }
@@ -276,7 +304,8 @@
     }
 
     if (!isEqual) {
-      this.updateMessage('两次密码不一致，请重新设置！', 1000);
+      this.updateMessage('两次密码不一致，请重新设置！');
+      this.password.model = 1;
       return false;
     } else {
       w.localStorage.setItem('_HandLockPsd', JSON.stringify(password.tmp));
@@ -299,31 +328,39 @@
     }
 
     if (!isEqual) {
-      this.updateMessage('密码错误， 请重新输入！', 1000);
+      this.updateMessage('密码错误， 请再试一次！');
       return false;
     } else {
-      this.updateMessage('解锁成功！', 1000);
+      this.updateMessage('解锁成功！');
     }
     return true;
   }
 
   GestureLock.prototype.updateMessage = function(msg, delay) {
-    // clearTimeout(this.messageTimer);
+    if (this.timer) {
+      clearTimeout(this.timer);
+    }
     const { messageEle } = this;
-    // messageEle.style.display = 'block';
     messageEle.innerHTML = msg;
+    messageEle.style.opacity = 1;
 
-    // this.messageTimer = setTimeout(() => {
-    //   messageEle.style.display = 'none';
-    // }, delay || 1000);
+    if (delay) {
+      this.timer = setTimeout(() => {
+        messageEle.style.opacity = 0;
+      }, delay)
+    }
   }
 
   GestureLock.prototype.registerEventListener = function() { 
     const { canvas2, devicePixelRatio } = this;
 
     canvas2.addEventListener('touchstart', (e) => {
-      e.preventDefault();
       console.warn('touch start');
+      e.preventDefault();
+
+      if (!this.reseted) return;
+      this.reseted = false;
+
       const curPoint = GestureLock._getPosition(e, devicePixelRatio);
       this.spareCircles = this.spareCircles.concat(this.touchedCircles.splice(0));
       this.checkCurrentPoint(curPoint);
@@ -340,28 +377,25 @@
     }, false);
 
     canvas2.addEventListener('touchend', (e) => {
-      if (this.touched) {
-        this.touched = false;
-        this.checkPassword();
+      console.warn('touch end');
 
+      if (this.touched) {
+        this.checkPassword();
+        this.touched = false;
         this.spareCircles = this.spareCircles.concat(this.touchedCircles.splice(0));
-        this.reset();
+        setTimeout(() => {
+          this.reset();
+          this.reseted = true;
+        }, 400)
       }
     }, false);
 
-    // this.setEle.addEventListener('click', (e) => {
-    //   this.password.model = 1;
-    //   this.updateMessage('请绘制手势图案！', 1000);
-    // })
+    this.resetEle.addEventListener('click', (e) => {
+      window.localStorage.removeItem('_HandLockPsd');
+      this.password.model = 1;
+      this.updateMessage('请绘制手势图案！');
+    })
 
-    // this.checkEle.addEventListener('click', (e) => {
-    //   if (this.password.value) {
-    //     this.password.model = 3;
-    //     this.updateMessage('');
-    //   } else {
-
-    //   }
-    // })
   }
 
   w.GestureLock = GestureLock;
