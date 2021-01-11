@@ -4,8 +4,35 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Gesture Lock</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+    }
+    h4 {
+      text-align: center;
+      height: 30px;
+    }
+    #lock {
+      width: 320px;
+      height: 400px;
+      margin: 0 auto;
+    }
+  </style>
 </head>
 <body>
+  <div>
+    <h4 id="message"></h4>
+    <div id="lock"></div>
+  </div>
   <script src="./gestureLock.js"></script>
+
+  <script>
+    const lock = new GestureLock({
+      ele: document.getElementById('lock'),
+      messageEle: document.getElementById('message')
+    });
+    lock.init();
+  </script>
 </body>
 </html>
