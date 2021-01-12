@@ -1,7 +1,7 @@
 (function (w) {
   function GestureLock(options = {}) {    
     this.ele = options.ele || document.body;
-    this.type = options.type || 3;
+    this.type = options.type > 3 ? options.type : 3;
     this.style = options.style || {
       color: '#ffa726',
       circleLineWidth: 2,
@@ -225,7 +225,10 @@
       value: JSON.parse(psdValue)
     }
 
-    this.messageEle.innerHTML = psdValue ? '请解锁' : '请绘制手势图案！';
+    const msg = psdValue ? '请解锁' : '请绘制手势图案！';
+    this.updateMessage({
+      msg
+    })
   }
 
   GestureLock.prototype.checkPassword = function() {
@@ -279,7 +282,14 @@
   // Model1: set password for the first time
   GestureLock.prototype.setPassword = function() {
     if (this.touchedCircles.length < 5) {
-      this.updateMessage('密码长度不可少于5！');
+      this.updateMessage({
+        msg: '密码长度不可少于5！',
+        color: '#f24e4e'
+      }, 1000, () => {
+        this.updateMessage({
+          msg: '请绘制手势图案！'
+        })
+      });
       return false;
     } else {
       this.password.tmp = [];
@@ -287,7 +297,9 @@
         this.password.tmp.push(c.id)
       });
       this.password.model = 2;
-      this.updateMessage('请再次确定密码！');
+      this.updateMessage({
+        msg: '请再次确定密码！'
+      });
     }
     return true;
   }
@@ -304,14 +316,28 @@
     }
 
     if (!isEqual) {
-      this.updateMessage('两次密码不一致，请重新设置！');
+      this.updateMessage({
+        msg: '两次密码不一致，请重新设置！',
+        color: '#f24e4e'
+      }, 1000, () => {
+        this.updateMessage({
+          msg: '请绘制手势图案！',
+        });
+      });
       this.password.model = 1;
       return false;
     } else {
       w.localStorage.setItem('_HandLockPsd', JSON.stringify(password.tmp));
       this.password.model = 3;
       this.password.value = [...password.tmp];
-      this.updateMessage('设置成功！', 1000);
+      this.updateMessage({
+        msg: '设置成功！',
+        color: '#2cff66'
+      }, 1000, () => {
+        this.updateMessage({
+          msg: '请解锁！'
+        })
+      });
     }
     return true;
   }
@@ -328,25 +354,35 @@
     }
 
     if (!isEqual) {
-      this.updateMessage('密码错误， 请再试一次！');
+      this.updateMessage({
+        msg: '密码错误， 请再试一次！',
+        color: '#f24e4e'
+      });
       return false;
     } else {
-      this.updateMessage('解锁成功！');
+      this.updateMessage({
+        msg: '解锁成功！',
+        color: '#2cff66',
+      });
     }
     return true;
   }
 
-  GestureLock.prototype.updateMessage = function(msg, delay) {
+  GestureLock.prototype.updateMessage = function({ msg, color = '#ffa726' }, delay, callback) {
     if (this.timer) {
       clearTimeout(this.timer);
     }
     const { messageEle } = this;
     messageEle.innerHTML = msg;
-    messageEle.style.opacity = 1;
+    messageEle.style.color = color;
+    if (messageEle.style.opacity === '0') {
+      messageEle.style.opacity = '1';
+    }
 
     if (delay) {
       this.timer = setTimeout(() => {
-        messageEle.style.opacity = 0;
+        messageEle.style.opacity = '0';
+        callback && callback();
       }, delay)
     }
   }
@@ -393,7 +429,9 @@
     this.resetEle.addEventListener('click', (e) => {
       window.localStorage.removeItem('_HandLockPsd');
       this.password.model = 1;
-      this.updateMessage('请绘制手势图案！');
+      this.updateMessage({
+        msg: '请绘制手势图案！',
+      });
     })
 
   }
